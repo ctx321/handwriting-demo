@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Handwriting Recognizer - runs in your browser</title>
+  <style>
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8; --accent2: #34d399;
+      --text: #e2e8f0; --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(1200px 800px at 70% -10%, #1e3a5f 0%, var(--bg) 55%);
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      background: rgba(30, 41, 59, .85); border: 1px solid rgba(148,163,184,.2);
+      border-radius: 20px; padding: 32px; max-width: 920px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.45); backdrop-filter: blur(6px);
+    }
+    .topline { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    h1 { margin: 0 0 6px; font-size: 1.7rem; }
+    p.sub { color: var(--muted); margin: 0 0 22px; max-width: 640px; }
+    .badge {
+      font-size: .78rem; color: #052e16; font-weight: 700; white-space: nowrap;
+      background: linear-gradient(135deg, var(--accent2), #6ee7b7);
+      padding: 5px 12px; border-radius: 999px;
+    }
+    a.ghost { color: var(--accent); text-decoration: none; font-size: .9rem; border-bottom: 1px dashed rgba(56,189,248,.5); }
+    .layout { display: flex; gap: 32px; flex-wrap: wrap; align-items: stretch; }
+    .draw-area { flex: 1 1 340px; min-width: 320px; }
+    .canvas-wrap { position: relative; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 2px rgba(148,163,184,.25); }
+    canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
+    .hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 1.4rem; pointer-events: none; transition: opacity .2s; }
+    .draw-area.is-writing .hint { opacity: 0; }
+    .toolbar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .result { flex: 1 1 300px; min-width: 280px; display: flex; flex-direction: column; }
+    .result h2 { margin: 0 0 12px; font-size: 1.05rem; color: var(--muted); font-weight: 500; }
+    .guess { font-size: 6rem; line-height: 1; text-align: center; font-weight: 700; color: var(--accent); background: rgba(56,189,248,.08); border-radius: 14px; padding: 12px 0 20px; margin-bottom: 18px; }
+    .guess.placeholder { color: #475569; font-size: 1.3rem; padding: 32px 0; font-weight: 500; }
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .bar-row .label { width: 16px; font-weight: 600; }
+    .bar-bg { flex: 1; background: rgba(148,163,184,.15); border-radius: 6px; height: 14px; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0ea5e9, #38bdf8); border-radius: 6px; transition: width .35s ease; }
+    .bar-row .pct { width: 48px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .status { margin-top: 14px; font-size: .85rem; color: var(--muted); min-height: 1.2em; text-align: center; }
+    button { border: none; border-radius: 10px; padding: 10px 18px; font-size: .95rem; cursor: pointer; background: rgba(148,163,184,.15); color: var(--text); transition: background .15s, transform .05s; }
+    button:hover { background: rgba(148,163,184,.28); }
+    button:active { transform: translateY(1px); }
+    button.primary { background: var(--accent); color: #0b1120; font-weight: 600; }
+    button.primary:hover { background: #7dd3fc; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .footer { margin-top: 18px; text-align: center; color: var(--muted); font-size: .8rem; }
+    .footer code { background: rgba(148,163,184,.15); padding: 1px 6px; border-radius: 6px; }
+    .timer { color: var(--accent2); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="topline">
+      <h1>Handwriting Recognizer</h1>
+      <span class="badge">100% in-browser inference · no server</span>
+    </div>
+    <p class="sub">
+      Draw a single digit (0–9). A <b>scikit-learn MLPClassifier</b> was trained on MNIST once,
+      its weights were exported, and the prediction runs right here in your browser with plain
+      JavaScript. <a class="ghost" href="presentation.html">View the model presentation &rarr;</a>
+    </p>
+
+    <div class="layout">
+      <div class="draw-area" id="drawArea">
+        <div class="canvas-wrap">
+          <canvas id="canvas"></canvas>
+          <div class="hint" id="hint">Draw a digit…</div>
+        </div>
+        <div class="toolbar">
+          <button id="clearBtn">Clear</button>
+          <button id="predictBtn" class="primary" disabled>Predict</button>
+        </div>
+      </div>
+
+      <div class="result">
+        <h2>Prediction</h2>
+        <div class="guess placeholder" id="guess">Awaiting your input</div>
+        <div id="bars"></div>
+        <div class="status" id="status">Loading model weights…</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Browser &rarr; downscale to 28&times;28 &rarr; <code>softmax( ReLU(xW&#8321;+b&#8321;)W&#8322;+b&#8322; )</code>
+      &rarr; result &nbsp;·&nbsp; inference time: <span class="timer" id="timer">—</span>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const DISPLAY = 280;
+
+    function setupCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = DISPLAY * dpr;
+      canvas.height = DISPLAY * dpr;
+      canvas.style.height = DISPLAY + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, DISPLAY, DISPLAY);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = "#0f172a";
+    }
+
+    let drawing = false;
+    let pos = { x: 0, y: 0 };
+    function scale(e) {
+      const rect = canvas.getBoundingClientRect();
+      const px = e.touches ? e.touches[0].clientX : e.clientX;
+      const py = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: ((px - rect.left) / rect.width) * DISPLAY, y: ((py - rect.top) / rect.height) * DISPLAY };
+    }
+    function start(e) { e.preventDefault(); pos = scale(e); drawing = true; drawArea.classList.add("is-writing"); }
+    function move(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const n = scale(e);
+      ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.lineTo(n.x, n.y); ctx.stroke();
+      pos = n;
+    }
+    const end = () => { drawing = false; };
+    canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); start(e); });
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
+    canvas.addEventListener("pointerleave", end);
+    setupCanvas();
+
+    function hasInk() {
+      const d = ctx.getImageData(0, 0, DISPLAY, DISPLAY).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return true;
+      return false;
+    }
+
+    /* ---------- model ---------- */
+    let model = null;
+    async function loadModel() {
+      const status = document.getElementById("status");
+      try {
+        status.textContent = "Loading model weights (1 MB)…";
+        const res = await fetch("model_weights.json", { cache: "force-cache" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const meta = await res.json();
+        const raw = Uint8Array.from(atob(meta.bin), (c) => c.charCodeAt(0));
+        const f = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
+        let o = 0;
+        model = {
+          W1: f.subarray(o, (o += 256 * 784)),
+          b1: f.subarray(o, (o += 256)),
+          W2: f.subarray(o, (o += 10 * 256)),
+          b2: f.subarray(o, (o += 10)),
+        };
+        predictBtn.disabled = false;
+        status.textContent = "Model ready — draw a digit and press Predict.";
+      } catch (err) {
+        status.textContent = "Could not load model weights: " + err.message +
+          ". This page must be served over http(s) (e.g. GitHub Pages or python -m http.server).";
+      }
+    }
+
+    /* ==== snippet:start (browser inference) ==== */
+    function forward(x) {
+      const { W1, b1, W2, b2 } = model;
+      const h = new Float32Array(256);
+      for (let k = 0; k < 256; k++) {
+        let s = b1[k];
+        const row = k * 784;
+        for (let i = 0; i < 784; i++) s += x[i] * W1[row + i];
+        h[k] = s > 0 ? s : 0;
+      }
+      const logits = new Float32Array(10);
+      for (let j = 0; j < 10; j++) {
+        let s = b2[j];
+        const row = j * 256;
+        for (let k = 0; k < 256; k++) s += h[k] * W2[row + k];
+        logits[j] = s;
+      }
+      let m = logits[0];
+      for (let j = 1; j < 10; j++) if (logits[j] > m) m = logits[j];
+      let sum = 0;
+      for (let j = 0; j < 10; j++) sum += (logits[j] = Math.exp(logits[j] - m));
+      for (let j = 0; j < 10; j++) logits[j] /= sum;
+      return logits;
+    }
+
+    /* ---------- preprocessing (mirrors the original backend) ---------- */
+    function cornerMedianLight() {
+      const patch = 5, vals = [];
+      const spots = [[0, 0], [DISPLAY - patch, 0], [0, DISPLAY - patch], [DISPLAY - patch, DISPLAY - patch]];
+      const d = ctx.getImageData(0, 0, DISPLAY, DISPLAY).data;
+      for (const [x0, y0] of spots)
+        for (let y = y0; y < y0 + patch; y++)
+          for (let x = x0; x < x0 + patch; x++) vals.push(d[(y * DISPLAY + x) * 4]);
+      vals.sort((a, b) => a - b);
+      return vals[vals.length >> 1] > 128;
+    }
+
+    function toModelInput() {
+      const bgLight = cornerMedianLight();
+      const tmp = document.createElement("canvas");
+      tmp.width = 28; tmp.height = 28;
+      const c = tmp.getContext("2d", { willReadFrequently: true });
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = "high";
+      c.drawImage(canvas, 0, 0, 28, 28);
+      const px = c.getImageData(0, 0, 28, 28).data;
+      const x = new Float32Array(784);
+      for (let i = 0; i < 784; i++) {
+        const v = px[i * 4] / 255;
+        x[i] = bgLight ? 1 - v : v;
+      }
+      return x;
+    }
+    /* ==== snippet:end (browser inference) ==== */
+
+    /* ---------- UI ---------- */
+    const guessEl = document.getElementById("guess");
+    const barsEl = document.getElementById("bars");
+    const statusEl = document.getElementById("status");
+    const predictBtn = document.getElementById("predictBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const drawArea = document.getElementById("drawArea");
+    const timerEl = document.getElementById("timer");
+
+    clearBtn.addEventListener("click", () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, DISPLAY, DISPLAY);
+      drawArea.classList.remove("is-writing");
+      guessEl.className = "guess placeholder";
+      guessEl.textContent = "Awaiting your input";
+      barsEl.innerHTML = "";
+      timerEl.textContent = "—";
+    });
+
+    predictBtn.addEventListener("click", () => {
+      if (!model) return;
+      if (!hasInk()) { statusEl.textContent = "Please draw a digit first."; return; }
+      const t0 = performance.now();
+      const x = toModelInput();
+      const probs = forward(x);
+      const dt = performance.now() - t0;
+
+      const sorted = Array.from({ length: 10 }, (_, i) => i).sort((a, b) => probs[b] - probs[a]);
+      guessEl.className = "guess";
+      guessEl.textContent = String(sorted[0]);
+
+      barsEl.innerHTML = "";
+      for (const digit of sorted) {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = digit;
+        const bg = document.createElement("div");
+        bg.className = "bar-bg";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill";
+        const pct = document.createElement("span");
+        pct.className = "pct";
+        pct.textContent = (probs[digit] * 100).toFixed(1) + "%";
+        bg.appendChild(fill);
+        row.append(label, bg, pct);
+        barsEl.appendChild(row);
+        requestAnimationFrame(() => { fill.style.width = probs[digit] * 100 + "%"; });
+      }
+      statusEl.textContent = "";
+      timerEl.textContent = dt.toFixed(1) + " ms";
+    });
+
+    loadModel();
+  </script>
+</body>
+</html>
