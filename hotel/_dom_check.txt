@@ -1,0 +1,15 @@
+len=18190
+FOUND 逐句分析
+FOUND 隔音
+FOUND 舒适度
+FOUND 设施
+FOUND 位置
+FOUND 服务
+FOUND 清洁度
+FOUND 未提及
+FOUND 提及
+FOUND 模型就绪
+FOUND 负面
+FOUND 正面
+FOUND 汽车喇叭声
+FOUND aspect
