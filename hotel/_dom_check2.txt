@@ -1,6 +1,0 @@
-status=妯″瀷灏辩华锛岃緭鍏ヨ瘎璁哄悗鐐瑰嚮鍒嗘瀽銆?/div>
-result_len=2352
-result_head=<div class="card"><div class="summary"><span class="chip">鍏?5 鍙?/span><span class="chip">璇嗗埆鍒?3 澶勬柟闈㈡彁鍙?/span><span class="chip">妯″瀷锛氫袱闃舵 MLP</span></div><div class="grid"><div class="aspect"><h3>闅旈煶
-has_loading=False
-has_ready=False
-has_fail=False
