@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教室头部检测 - 项目汇报</title>
+<style>
+:root{--bg:#0b1220;--panel:#131c2e;--panel2:#0f1729;--line:rgba(148,163,184,.2);
+--text:#e2e8f0;--muted:#8ea0bb;--accent:#38bdf8;--pos:#34d399;--neg:#f87171;--amber:#fbbf24}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+background:radial-gradient(1200px 900px at 80% -10%, #123 0%, var(--bg) 60%);color:var(--text);overflow:hidden}
+.deck{position:relative;height:100vh;width:100vw}
+.slide{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:40px 54px 76px}
+.slide.active{display:flex;animation:fade .3s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.inner{width:100%;max-width:1120px;max-height:100%;overflow:auto}
+.kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.2em;font-size:.78rem;font-weight:700}
+h1{font-size:clamp(1.7rem,3.4vw,2.7rem);margin:.5rem 0 .6rem}
+h2{font-size:clamp(1.3rem,2.4vw,2rem);margin:0 0 4px}
+.sub{color:var(--muted);font-size:clamp(.95rem,1.5vw,1.08rem);margin:0 0 16px}
+ul{margin:8px 0 0;padding-left:22px}
+li{margin:7px 0;font-size:clamp(.9rem,1.4vw,1.05rem);line-height:1.6}
+li b{color:#7dd3fc}
+code{background:rgba(148,163,184,.15);padding:1px 7px;border-radius:6px;font-size:.9em}
+pre{background:#0b1120;border:1px solid var(--line);border-radius:12px;padding:14px;
+font-size:clamp(.72rem,1.1vw,.86rem);line-height:1.5;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:clamp(.8rem,1.25vw,.98rem);margin-top:8px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:.85em}
+td:first-child{color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat .k{color:var(--muted);font-size:.78rem}
+.stat .v{font-size:1.15rem;font-weight:700;margin-top:2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:10px}
+img{max-width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.pair .t{font-size:.8rem;color:var(--muted);margin-bottom:4px}
+.pair .imgs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{border-left:3px solid var(--amber);background:rgba(251,191,36,.07);padding:9px 13px;
+border-radius:0 10px 10px 0;margin-top:10px;color:#fde68a;font-size:clamp(.8rem,1.2vw,.94rem)}
+.note.green{border-left-color:var(--pos);background:rgba(52,211,153,.06);color:#a7f3d0}
+.cover{text-align:center}
+.cover .meta{color:var(--muted);margin-top:16px}
+.badge{display:inline-block;margin-top:12px;font-size:.8rem;font-weight:700;color:#052e16;
+background:linear-gradient(135deg,var(--pos),#6ee7b7);padding:5px 13px;border-radius:999px}
+.links a{color:var(--accent);text-decoration:none;margin:0 10px;border-bottom:1px dashed rgba(56,189,248,.5)}
+.nav{position:fixed;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:14px;align-items:center;z-index:10}
+.nav button{border:1px solid var(--line);background:rgba(19,28,46,.9);color:var(--text);
+width:38px;height:38px;border-radius:50%;font-size:1rem;cursor:pointer}
+.counter{color:var(--muted);font-size:.85rem;min-width:64px;text-align:center}
+.progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--pos));z-index:10;transition:width .25s}
+.dots{position:fixed;top:12px;right:16px;display:flex;gap:6px;z-index:10}
+.dots span{width:8px;height:8px;border-radius:50%;background:rgba(148,163,184,.3);cursor:pointer}
+.dots span.on{background:var(--accent)}
+@media (max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="dots" id="dots"></div>
+<div class="deck">
+
+<section class="slide cover active">
+  <div class="inner">
+    <div class="kicker">Classroom Head Detection</div>
+    <h1>教室场景头部检测<br>从基准评测到微调与网页应用</h1>
+    <p class="sub">YOLOv8n · 单类 head · 固定 classroom test 150 张 · 同一套 IoU/AP 实现对比</p>
+    <div>
+      <span class="tag badge">RTX 4060 Laptop · CUDA 13.2 · torch 2.14</span>
+    </div>
+    <div class="meta links" style="margin-top:20px">
+      <a href="./">结果页</a><a href="count/">人数统计 Demo</a><a href="slides.html#1">按 ← → 翻页</a>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">01 · 项目与任务</div>
+    <h2>六个任务，一条完整管线</h2>
+    <ul>
+      <li><b>Task 1</b> 标注工具（Flask+Canvas）：增删改拖拽、缩放、保存/导出，不覆盖原标注</li>
+      <li><b>Task 2</b> 数据检查：自动检查 + 60 张人工复核模板</li>
+      <li><b>Task 3</b> 基准评测：起始模型在 test 上的 P/R、AP50、AP50-95、耗时</li>
+      <li><b>Task 4</b> 微调：classroom 训练 + mixed 对照实验（唯一变量=数据）</li>
+      <li><b>Task 5</b> 对比：同 5 张示例图 before/after</li>
+      <li><b>Task 6</b> 摄像头演示：实时框 + conf 滑杆 + 帧率</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">02 · 数据</div>
+    <h2>数据集与划分</h2>
+    <table><thead><tr><th>Image group</th><th>训练</th><th>验证</th><th>测试</th><th>总计</th></tr></thead><tbody><tr><td>Classroom</td><td>700</td><td>150</td><td>150</td><td>1,000</td></tr><tr><td>General scenes</td><td>240</td><td>60</td><td>0</td><td>300</td></tr><tr><td>合计</td><td>940</td><td>210</td><td>150</td><td>1,300</td></tr></tbody></table>
+    <ul>
+      <li>标注标准：<b>整个可见头部</b>（含侧脸/后脑/遮挡），不是人脸框、不是人体框</li>
+      <li>1,300 图 / 38,031 个 head 框；review 级别划分，classroom test 固定不参与训练</li>
+      <li>自动化检查：classroom train 700 张中 1 张有标记、general 240 张 0 标记</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">03 · 方法</div>
+    <h2>管线与起点</h2>
+    <div class="grid3">
+      <div class="stat"><div class="k">初始化</div><div class="v">COCO yolov8n.pt</div></div>
+      <div class="stat"><div class="k">起始模型</div><div class="v">general 集训练（240/60）</div></div>
+      <div class="stat"><div class="k">微调</div><div class="v">classroom 700（+mixed 对照）</div></div>
+    </div>
+    <div class="note">课程包不含 instructor 的起始 checkpoint（需向其索取）。本汇报用<b>自训练替代版</b>：
+    仅用 general 集训练，未接触 classroom val/test。拿到正式 checkpoint 后重跑 predict/evaluate 即可替换基准列。</div>
+    <ul>
+      <li>训练设置：epochs 100 · imgsz 640 · batch 16 · lr0 0.001 · seed 0 · 全参数微调</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">04 · 起始检测器</div>
+    <h2>general 集训练结果</h2>
+    <div class="grid3">
+      <div class="stat"><div class="k">general val P / R</div><div class="v">0.903 / 0.791</div></div>
+      <div class="stat"><div class="k">mAP50</div><div class="v">0.885</div></div>
+      <div class="stat"><div class="k">mAP50-95</div><div class="v">0.485</div></div>
+    </div>
+    <div class="card"><svg viewBox="0 0 900 360" style="width:100%;height:auto"><line x1="52" y1="308.0" x2="848" y2="308.0" stroke="rgba(148,163,184,.15)"/><text x="44" y="312.0" text-anchor="end" fill="#8ea0bb" font-size="13">0.175</text><line x1="52" y1="244.0" x2="848" y2="244.0" stroke="rgba(148,163,184,.15)"/><text x="44" y="248.0" text-anchor="end" fill="#8ea0bb" font-size="13">0.257</text><line x1="52" y1="180.0" x2="848" y2="180.0" stroke="rgba(148,163,184,.15)"/><text x="44" y="184.0" text-anchor="end" fill="#8ea0bb" font-size="13">0.338</text><line x1="52" y1="116.0" x2="848" y2="116.0" stroke="rgba(148,163,184,.15)"/><text x="44" y="120.0" text-anchor="end" fill="#8ea0bb" font-size="13">0.419</text><line x1="52" y1="52.0" x2="848" y2="52.0" stroke="rgba(148,163,184,.15)"/><text x="44" y="56.0" text-anchor="end" fill="#8ea0bb" font-size="13">0.501</text><text x="52.0" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">0</text><text x="131.6" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">10</text><text x="211.2" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">20</text><text x="290.8" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">30</text><text x="370.4" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">40</text><text x="450.0" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">50</text><text x="529.6" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">60</text><text x="609.2" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">70</text><text x="688.8" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">80</text><text x="768.4" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">90</text><text x="848.0" y="328" text-anchor="middle" fill="#8ea0bb" font-size="13">100</text><polyline points="60.0,292.6 67.9,231.0 75.9,205.9 83.8,260.5 91.8,200.2 99.8,222.6 107.7,205.1 115.7,133.5 123.6,132.0 131.6,147.8 139.6,122.6 147.5,119.1 155.5,93.6 163.4,98.7 171.4,97.2 179.4,94.3 187.3,103.1 195.3,89.2 203.2,99.5 211.2,99.3 219.2,80.7 227.1,85.2 235.1,111.6 243.0,73.0 251.0,91.1 259.0,76.5 266.9,89.7 274.9,84.7 282.8,83.0 290.8,104.3 298.8,77.9 306.7,84.6 314.7,88.0 322.6,80.8 330.6,82.8 338.6,82.9 346.5,90.2 354.5,94.9 362.4,83.0 370.4,84.5 378.4,79.9 386.3,81.5 394.3,78.2 402.2,82.1 410.2,82.8 418.2,75.5 426.1,70.1 434.1,74.0 442.0,70.9 450.0,77.1 458.0,87.8 465.9,79.4 473.9,87.6 481.8,82.8 489.8,75.8 497.8,69.4 505.7,69.4 513.7,68.1 521.6,67.3 529.6,79.8 537.6,78.3 545.5,71.8 553.5,67.2 561.4,74.3 569.4,70.3 577.4,71.1 585.3,86.0 593.3,77.9 601.2,67.8 609.2,71.6 617.2,74.0 625.1,70.6 633.1,74.1 641.0,70.9 649.0,71.2 657.0,74.1 664.9,84.4 672.9,79.1 680.8,68.9 688.8,80.7 696.8,82.3 704.7,73.0 712.7,75.9 720.6,71.6 728.6,69.1 736.6,70.1 744.5,67.1 752.5,67.9 760.4,65.4 768.4,72.0 776.4,74.3 784.3,71.0 792.3,75.9 800.2,68.7 808.2,64.1 816.2,66.4 824.1,66.1 832.1,67.8 840.0,66.1 848.0,67.1" fill="none" stroke="#38bdf8" stroke-width="2.4"/><polyline points="60.0,218.2 67.9,191.6 75.9,206.4 83.8,183.5 91.8,184.0 99.8,177.0 107.7,193.3 115.7,187.4 123.6,180.4 131.6,170.2 139.6,166.2 147.5,162.4 155.5,174.5 163.4,182.7 171.4,159.0 179.4,153.3 187.3,162.9 195.3,153.8 203.2,141.5 211.2,142.8 219.2,146.7 227.1,158.2 235.1,156.6 243.0,134.6 251.0,138.2 259.0,137.5 266.9,153.3 274.9,154.4 282.8,140.5 290.8,141.6 298.8,140.1 306.7,147.0 314.7,136.7 322.6,138.5 330.6,146.0 338.6,133.0 346.5,136.9 354.5,132.0 362.4,158.2 370.4,135.9 378.4,137.9 386.3,132.7 394.3,133.8 402.2,147.8 410.2,134.4 418.2,128.4 426.1,143.2 434.1,130.8 442.0,126.1 450.0,131.7 458.0,147.1 465.9,132.8 473.9,136.3 481.8,126.2 489.8,129.2 497.8,133.5 505.7,131.4 513.7,130.3 521.6,132.0 529.6,136.8 537.6,132.8 545.5,134.2 553.5,127.8 561.4,125.7 569.4,135.8 577.4,126.6 585.3,126.4 593.3,128.8 601.2,133.3 609.2,126.3 617.2,128.0 625.1,124.2 633.1,126.2 641.0,126.3 649.0,130.0 657.0,126.9 664.9,126.7 672.9,125.4 680.8,128.1 688.8,126.3 696.8,124.1 704.7,124.8 712.7,131.0 720.6,123.3 728.6,126.4 736.6,124.6 744.5,126.7 752.5,130.1 760.4,122.6 768.4,125.4 776.4,127.2 784.3,129.5 792.3,126.6 800.2,127.4 808.2,129.7 816.2,126.0 824.1,125.7 832.1,124.6 840.0,125.1 848.0,127.1" fill="none" stroke="#34d399" stroke-width="2.4"/><polyline points="60.0,214.9 67.9,198.1 75.9,215.6 83.8,183.6 91.8,188.7 99.8,184.4 107.7,178.9 115.7,164.3 123.6,161.3 131.6,174.5 139.6,156.5 147.5,159.9 155.5,166.2 163.4,165.1 171.4,156.3 179.4,155.3 187.3,177.6 195.3,150.5 203.2,147.3 211.2,181.2 219.2,149.4 227.1,154.4 235.1,153.2 243.0,155.9 251.0,149.3 259.0,219.0 266.9,152.7 274.9,141.3 282.8,150.5 290.8,152.2 298.8,137.6 306.7,153.7 314.7,145.0 322.6,139.9 330.6,138.3 338.6,138.3 346.5,140.5 354.5,138.3 362.4,146.2 370.4,139.6 378.4,137.3 386.3,135.3 394.3,136.5 402.2,138.7 410.2,133.4 418.2,132.0 426.1,135.1 434.1,133.1 442.0,145.9 450.0,138.7 458.0,129.5 465.9,133.3 473.9,134.6 481.8,133.0 489.8,132.8 497.8,134.2 505.7,129.5 513.7,131.5 521.6,130.5 529.6,138.0 537.6,128.6 545.5,136.6 553.5,133.3 561.4,131.9 569.4,130.7 577.4,129.2 585.3,132.0 593.3,132.3 601.2,134.5 609.2,128.2 617.2,130.0 625.1,127.3 633.1,128.4 641.0,126.6 649.0,129.0 657.0,128.1 664.9,126.4 672.9,128.3 680.8,127.1 688.8,124.8 696.8,127.2 704.7,125.1 712.7,126.1 720.6,127.0 728.6,128.8 736.6,125.2 744.5,128.5 752.5,128.3 760.4,129.1 768.4,126.7 776.4,128.2 784.3,128.2 792.3,127.2 800.2,128.0 808.2,126.3 816.2,127.1 824.1,129.4 832.1,126.4 840.0,126.6 848.0,126.7" fill="none" stroke="#fbbf24" stroke-width="2.4"/><text x="52" y="24" fill="#8ea0bb" font-size="14">验证集 AP50-95 训练曲线（蓝=起始/general，绿=classroom 微调，黄=mixed）</text></svg></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">05 · Task 3 基准</div>
+    <h2>微调前：classroom test 基准</h2>
+    <div class="grid2">
+      <div>
+        <table><thead><tr><th>指标</th><th>基准（自训练起始模型）</th></tr></thead><tbody><tr><td>P @ 0.25</td><td>0.7659</td></tr><tr><td>R @ 0.25</td><td>0.7771</td></tr><tr><td>AP50</td><td>0.8296</td></tr><tr><td>AP50-95</td><td>0.3518</td></tr><tr><td>速度/图</td><td>18.8 ms</td></tr></tbody></table>
+        <div class="note">conf 0.25 / IoU 0.50；AP 保留低分预测并扫阈值（101 点插值），与微调后使用同一实现。</div>
+      </div>
+      <div class="pair"><div class="t">误差最大示例（绿=GT, 红=预测）</div>
+        <img src="assets/base_img_000007.jpg">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">06 · Task 4 微调</div>
+    <h2>classroom 微调 + mixed 对照实验</h2>
+    <table><thead><tr><th>训练数据</th><th>图数</th><th>P@0.25</th><th>R@0.25</th><th>AP50</th><th>AP50-95</th></tr></thead><tbody><tr><td>classroom</td><td>700</td><td>0.8717</td><td>0.9251</td><td>0.9494</td><td>0.4740</td></tr><tr><td>classroom + general</td><td>700 + 240</td><td>0.8461</td><td>0.9308</td><td>0.9499</td><td>0.4732</td></tr></tbody></table>
+    <div class="note green">对照实验结论：加入 general 图像后 recall 略升（0.9251→0.9308）、precision 下降
+    （0.8717→0.8461），AP 基本持平。对固定教室测试集<b>没有实质增益</b>——起始模型已含通用头部特征，
+    再混合反而稀释教室数据占比。成本：训练图数 +34%。</div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">07 · Task 5 对比</div>
+    <h2>微调前后（classroom test）</h2>
+    <table><thead><tr><th>指标（classroom test, 150 图）</th><th>Before 微调</th><th>After 微调</th></tr></thead><tbody><tr><td>Precision @ 0.25</td><td>0.7659</td><td>0.8717</td></tr><tr><td>Recall @ 0.25</td><td>0.7771</td><td>0.9251</td></tr><tr><td>AP50</td><td>0.8296</td><td>0.9494</td></tr><tr><td>AP50-95</td><td>0.3518</td><td>0.4740</td></tr><tr><td>时间 / 图</td><td>18.8 ms</td><td>13.0 ms</td></tr></tbody></table>
+    <div class="note">结论：微调显著提升精度与召回（AP50 +0.12，AP50-95 +0.12），推理更快（18.8→13.0 ms，GPU batch 1）。</div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">08 · 示例</div>
+    <h2>同一批示例：左=微调前，右=微调后</h2>
+    <div class="grid3"><div class="pair"><div class="t">img_000007</div><div class="imgs"><img src="assets/base_img_000007.jpg"><img src="assets/fine_img_000007.jpg"></div></div><div class="pair"><div class="t">img_000286</div><div class="imgs"><img src="assets/base_img_000286.jpg"><img src="assets/fine_img_000286.jpg"></div></div><div class="pair"><div class="t">img_000435</div><div class="imgs"><img src="assets/base_img_000435.jpg"><img src="assets/fine_img_000435.jpg"></div></div></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">09 · Task 1</div>
+    <h2>标注工具</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>导入 YOLO TXT / VOC XML，显示原有框</li>
+          <li>上一张/下一张、缩放、标签显示开关、文件名与框数</li>
+          <li>新增/删除/移动/缩放框；保存到 <code>annotations_edited/</code>，不覆盖原文件</li>
+          <li>导出 YOLO zip；缩放后框仍对齐</li>
+        </ul>
+        <pre>python -m annotator.app --images .../images/classroom/train \
+    --labels .../labels/classroom/train --format yolo</pre>
+      </div>
+      <img src="assets/annotator.jpg">
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">10 · Task 6</div>
+    <h2>摄像头演示</h2>
+    <div class="grid2">
+      <img src="assets/single_demo.jpg">
+      <div>
+        <ul>
+          <li><code>python -m src.webcam --weights runs/finetune/weights/best.pt</code></li>
+          <li>实时画框 + 置信度 + 检测数 + 帧率；滑杆只过滤预测，不重训</li>
+          <li>低阈值→更多误检；高阈值→漏检增加</li>
+          <li>域差异：教室俯拍 vs 摄像头近景，视角/尺度不同会掉精度（实测空场景 0 检出，符合预期）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">11 · 在线 Demo</div>
+    <h2>上传图片 → 数出教室人数</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>微调模型导出 ONNX，浏览器端 <b>WASM 推理</b>（onnxruntime-web）</li>
+          <li>上传/拖拽图片，自动框出每个头并显示人数</li>
+          <li>置信度滑杆实时过滤；图片不上传服务器</li>
+          <li>实测：拥挤教室示例（87 人）识别出 82 人</li>
+        </ul>
+        <div class="links" style="margin-top:12px"><a href="count/">打开人数统计 Demo →</a></div>
+      </div>
+      <img src="assets/single_demo.jpg">
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="inner">
+    <div class="kicker">12 · 结语</div>
+    <h2>结论与不足</h2>
+    <ul>
+      <li>微调把 AP50 从 0.830 提到 <b>0.949</b>，AP50-95 从 0.352 提到 <b>0.474</b>；主要的剩余错误是小目标与严重遮挡头部</li>
+      <li>mixed 对照实验无增益（诚实报告）；错误多集中在远景小头与相互遮挡</li>
+      <li>起始 checkpoint 为自训练替代版（课程包未含）；正式对比需替换为 instructor 版本</li>
+      <li>数据集按图片划分，不保证教室/视频级的独立性，泛化结论有局限</li>
+    </ul>
+    <div class="links" style="margin-top:14px">
+      <a href="./">结果页</a><a href="count/">人数统计 Demo</a>
+      <a href="https://github.com/ctx321/handwriting-demo" target="_blank" rel="noopener">代码仓库</a>
+    </div>
+  </div>
+</section>
+
+</div>
+<div class="nav">
+  <button id="prev">←</button><span class="counter" id="counter">1 / 1</span><button id="next">→</button>
+</div>
+<script>
+"use strict";
+const slides = Array.from(document.querySelectorAll(".slide"));
+const dots = document.getElementById("dots");
+const counter = document.getElementById("counter");
+const progress = document.getElementById("progress");
+let idx = 0;
+slides.forEach((_, i) => { const d = document.createElement("span"); d.onclick = () => show(i); dots.appendChild(d); });
+function show(i) {
+  idx = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("active", k === idx));
+  Array.from(dots.children).forEach((d, k) => d.classList.toggle("on", k === idx));
+  counter.textContent = (idx + 1) + " / " + slides.length;
+  progress.style.width = ((idx + 1) / slides.length * 100) + "%";
+  history.replaceState(null, "", "#" + (idx + 1));
+}
+document.getElementById("prev").onclick = () => show(idx - 1);
+document.getElementById("next").onclick = () => show(idx + 1);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); show(idx + 1); }
+  if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(idx - 1); }
+});
+const m = location.hash.match(/^#(\d+)$/);
+show(m ? Number(m[1]) - 1 : 0);
+</script>
+</body>
+</html>

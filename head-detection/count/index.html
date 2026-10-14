@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教室人数统计 - 上传图片自动计数</title>
+<style>
+:root{--bg:#0b1220;--panel:#131c2e;--panel2:#0f1729;--line:rgba(148,163,184,.18);
+--text:#e2e8f0;--muted:#8ea0bb;--accent:#38bdf8;--pos:#34d399;--neg:#f87171;--amber:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+background:radial-gradient(1200px 900px at 80% -10%, #123 0%, var(--bg) 55%);color:var(--text);line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:34px 20px 70px}
+header{text-align:center;padding:24px 0 4px}
+.kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.2em;font-size:.78rem;font-weight:700}
+h1{font-size:1.9rem;margin:.4rem 0 .3rem}
+header p{color:var(--muted);max-width:700px;margin:0 auto}
+.links{margin-top:12px}
+.links a{color:var(--accent);text-decoration:none;margin:0 10px;border-bottom:1px dashed rgba(56,189,248,.5)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px 24px;
+box-shadow:0 10px 30px rgba(0,0,0,.25);margin-top:20px}
+.drop{border:2px dashed rgba(148,163,184,.35);border-radius:14px;padding:26px;text-align:center;
+color:var(--muted);cursor:pointer;transition:border-color .15s, background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:rgba(56,189,248,.06)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+button{border:none;border-radius:10px;padding:9px 16px;font-size:.9rem;cursor:pointer;
+background:rgba(148,163,184,.15);color:var(--text)}
+button:hover{background:rgba(148,163,184,.28)}
+button.primary{background:var(--accent);color:#0b1120;font-weight:700}
+button:disabled{opacity:.5;cursor:not-allowed}
+input[type=range]{width:200px}
+.stage{position:relative;margin-top:16px}
+canvas{max-width:100%;border-radius:12px;border:1px solid var(--line);display:block;background:#0b1120}
+.counter{position:absolute;top:14px;left:14px;background:rgba(11,17,32,.82);border:1px solid var(--line);
+border-radius:12px;padding:10px 16px;font-size:1rem}
+.counter b{font-size:2rem;color:var(--pos)}
+.status{color:var(--muted);font-size:.88rem;margin-top:10px;min-height:1.3em}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat .k{color:var(--muted);font-size:.78rem}
+.stat .v{font-size:1.05rem;font-weight:700;margin-top:2px}
+.note{border-left:3px solid var(--amber);background:rgba(251,191,36,.07);padding:10px 14px;
+border-radius:0 12px 12px 0;margin-top:14px;color:#fde68a;font-size:.9rem}
+footer{color:var(--muted);font-size:.82rem;text-align:center;margin-top:50px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">Classroom Head Counter</div>
+  <h1>教室人数统计</h1>
+  <p>上传一张教室照片，浏览器内用微调后的 YOLOv8n（ONNX + WASM）自动框出每个可见头部并统计人数，图片不上传服务器。</p>
+  <div class="links">
+    <a href="../">项目结果页</a><a href="../slides.html">PPT 汇报</a><a href="../index.html">模型说明</a>
+  </div>
+</header>
+
+<div class="card">
+  <div class="drop" id="drop">
+    点击选择图片，或把图片拖到这里 &nbsp;·&nbsp; 也可以试试：
+    <div class="toolbar" style="justify-content:center;margin-top:10px">
+      <button data-sample="samples/crowd.jpg">示例：拥挤教室（87 人）</button>
+      <button data-sample="samples/class.jpg">示例：普通教室（10 人）</button>
+    </div>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+  <div class="toolbar">
+    <label>置信度阈值 <input type="range" id="conf" min="5" max="90" value="25"> <span id="confVal">0.25</span></label>
+    <button id="runBtn" disabled class="primary">重新识别</button>
+  </div>
+  <div class="status" id="status">正在加载模型（约 12 MB，仅首次需要）…</div>
+</div>
+
+<div class="card">
+  <div class="stage">
+    <canvas id="canvas"></canvas>
+    <div class="counter" id="counterBox" style="display:none">识别到 <b id="count">0</b> 人</div>
+  </div>
+  <div class="grid2">
+    <div class="stat"><div class="k">检测框数量</div><div class="v" id="statBoxes">-</div></div>
+    <div class="stat"><div class="k">推理耗时（WASM, 单线程）</div><div class="v" id="statTime">-</div></div>
+    <div class="stat"><div class="k">图片尺寸</div><div class="v" id="statSize">-</div></div>
+  </div>
+  <div class="note">模型基于教室俯拍/监控视角训练（head 单类），教室照片效果最佳；近景自拍、严重遮挡或极暗画面会有漏检。
+  调整置信度阈值可实时看到检出数量的变化（只做过滤，不重新推理）。</div>
+</div>
+
+<footer>Classroom Head Detection · 纯浏览器推理（onnxruntime-web WASM）· 结果页: /head-detection/</footer>
+</div>
+
+<script src="ort.wasm.min.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas");
+const ctx = canvas.getContext("2d");
+const statusEl = $("status");
+
+const IMGSZ = 640, NMS_IOU = 0.6;
+let session = null, img = null, raw = null, lastTime = 0;
+
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.wasmPaths = "./";
+
+async function loadModel() {
+  try {
+    session = await ort.InferenceSession.create("model.onnx", { executionProviders: ["wasm"] });
+    statusEl.textContent = "模型就绪，请选择图片。";
+    $("runBtn").disabled = !img;
+  } catch (err) {
+    statusEl.textContent = "模型加载失败：" + err.message;
+  }
+}
+
+function letterbox(source) {
+  const w = source.width, h = source.height;
+  const r = Math.min(IMGSZ / w, IMGSZ / h);
+  const nw = Math.round(w * r), nh = Math.round(h * r);
+  const dx = Math.floor((IMGSZ - nw) / 2), dy = Math.floor((IMGSZ - nh) / 2);
+  const c = document.createElement("canvas");
+  c.width = IMGSZ; c.height = IMGSZ;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgb(114,114,114)";
+  g.fillRect(0, 0, IMGSZ, IMGSZ);
+  g.drawImage(source, dx, dy, nw, nh);
+  return { canvas: c, r, dx, dy, w, h };
+}
+
+function iou(a, b) {
+  const x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]);
+  const x2 = Math.min(a[2], b[2]), y2 = Math.min(a[3], b[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter;
+  return ua > 0 ? inter / ua : 0;
+}
+
+function nms(boxes, scores, thr) {
+  const order = boxes.map((_, i) => i).sort((i, j) => scores[j] - scores[i]);
+  const keep = [], used = new Array(boxes.length).fill(false);
+  for (const i of order) {
+    if (used[i]) continue;
+    keep.push(i);
+    for (const j of order) {
+      if (!used[j] && j !== i && iou(boxes[i], boxes[j]) > thr) used[j] = true;
+    }
+  }
+  return keep;
+}
+
+async function run() {
+  if (!session || !img) return;
+  statusEl.textContent = "识别中…";
+  await new Promise(r => setTimeout(r, 10));
+
+  const { canvas: lb, r, dx, dy, w, h } = letterbox(img);
+  const g = lb.getContext("2d").getImageData(0, 0, IMGSZ, IMGSZ).data;
+  const input = new Float32Array(3 * IMGSZ * IMGSZ);
+  for (let i = 0; i < IMGSZ * IMGSZ; i++) {
+    input[i] = g[i * 4] / 255;
+    input[IMGSZ * IMGSZ + i] = g[i * 4 + 1] / 255;
+    input[2 * IMGSZ * IMGSZ + i] = g[i * 4 + 2] / 255;
+  }
+  const tensor = new ort.Tensor("float32", input, [1, 3, IMGSZ, IMGSZ]);
+
+  const t0 = performance.now();
+  const out = await session.run({ [session.inputNames[0]]: tensor });
+  lastTime = performance.now() - t0;
+  const data = out[session.outputNames[0]].data;
+  const N = 8400;
+  const boxes = [], scores = [];
+  for (let i = 0; i < N; i++) {
+    const s = data[4 * N + i];
+    if (s < 0.05) continue;
+    const cx = data[0 * N + i], cy = data[1 * N + i];
+    const bw = data[2 * N + i], bh = data[3 * N + i];
+    boxes.push([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2]);
+    scores.push(s);
+  }
+  raw = { boxes, scores, r, dx, dy, w, h };
+  draw();
+  statusEl.textContent = "";
+}
+
+function draw() {
+  if (!raw) return;
+  const { boxes, scores, r, dx, dy, w, h } = raw;
+  const conf = Number($("conf").value) / 100;
+  const keep = [];
+  boxes.forEach((b, i) => { if (scores[i] >= conf) keep.push(i); });
+  const keepNms = nms(keep.map(i => boxes[i]), keep.map(i => scores[i]), NMS_IOU);
+
+  canvas.width = w; canvas.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+  let count = 0;
+  keepNms.forEach(k => {
+    const b = boxes[keep[k]];
+    const x1 = Math.max(0, (b[0] - dx) / r), y1 = Math.max(0, (b[1] - dy) / r);
+    const x2 = Math.min(w, (b[2] - dx) / r), y2 = Math.min(h, (b[3] - dy) / r);
+    count++;
+    ctx.strokeStyle = "#f87171";
+    ctx.lineWidth = Math.max(2, w / 400);
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    ctx.fillStyle = "#f87171";
+    ctx.font = `${Math.max(11, w / 60)}px system-ui`;
+    ctx.fillText(scores[keep[k]].toFixed(2), x1 + 2, Math.max(12, y1 - 4));
+  });
+  $("counterBox").style.display = "block";
+  $("count").textContent = count;
+  $("statBoxes").textContent = count;
+  $("statTime").textContent = lastTime.toFixed(0) + " ms";
+  $("statSize").textContent = `${w} × ${h}`;
+  document.title = `count=${count}`;
+}
+
+function loadImage(src, revoke) {
+  const im = new Image();
+  im.onload = () => {
+    img = im;
+    $("runBtn").disabled = !session;
+    if (revoke) URL.revokeObjectURL(src);
+    run();
+  };
+  im.onerror = () => { statusEl.textContent = "图片加载失败。"; };
+  im.src = src;
+}
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) loadImage(URL.createObjectURL(f), true);
+});
+["dragover", "dragenter"].forEach(ev => $("drop").addEventListener(ev, (e) => {
+  e.preventDefault(); $("drop").classList.add("over");
+}));
+["dragleave", "drop"].forEach(ev => $("drop").addEventListener(ev, (e) => {
+  e.preventDefault(); $("drop").classList.remove("over");
+}));
+$("drop").addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) loadImage(URL.createObjectURL(f), true);
+});
+document.querySelectorAll("[data-sample]").forEach(b =>
+  b.addEventListener("click", (e) => { e.stopPropagation(); loadImage(b.dataset.sample, false); }));
+$("conf").addEventListener("input", () => {
+  $("confVal").textContent = (Number($("conf").value) / 100).toFixed(2);
+  draw();
+});
+$("runBtn").addEventListener("click", run);
+
+loadModel().then(() => {
+  const m = location.search.match(/sample=(\d+)/);
+  if (m) {
+    const src = Number(m[1]) === 2 ? "samples/class.jpg" : "samples/crowd.jpg";
+    loadImage(src, false);
+  }
+});
+</script>
+</body>
+</html>
