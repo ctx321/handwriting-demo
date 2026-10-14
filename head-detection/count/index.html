@@ -9,7 +9,7 @@
 --text:#e2e8f0;--muted:#8ea0bb;--accent:#38bdf8;--pos:#34d399;--neg:#f87171;--amber:#fbbf24}
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
-background:radial-gradient(1200px 900px at 80% -10%, #123 0%, var(--bg) 55%);color:var(--text);line-height:1.6}
+background:radial-gradient(1200px 900px at 70% -10%, #123 0%, var(--bg) 55%);color:var(--text);line-height:1.6}
 .wrap{max-width:1080px;margin:0 auto;padding:34px 20px 70px}
 header{text-align:center;padding:24px 0 4px}
 .kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.2em;font-size:.78rem;font-weight:700}
@@ -35,6 +35,9 @@ canvas{max-width:100%;border-radius:12px;border:1px solid var(--line);display:bl
 border-radius:12px;padding:10px 16px;font-size:1rem}
 .counter b{font-size:2rem;color:var(--pos)}
 .status{color:var(--muted);font-size:.88rem;margin-top:10px;min-height:1.3em}
+.status.error{color:var(--neg)}
+.progress{height:6px;background:rgba(148,163,184,.15);border-radius:4px;margin-top:8px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0ea5e9,#38bdf8);transition:width .2s}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
 .stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .stat .k{color:var(--muted);font-size:.78rem}
@@ -49,9 +52,9 @@ footer{color:var(--muted);font-size:.82rem;text-align:center;margin-top:50px}
 <header>
   <div class="kicker">Classroom Head Counter</div>
   <h1>教室人数统计</h1>
-  <p>上传一张教室照片，浏览器内用微调后的 YOLOv8n（ONNX + WASM）自动框出每个可见头部并统计人数，图片不上传服务器。</p>
+  <p>上传一张教室照片，浏览器内用微调后的 YOLOv8n（ONNX int8 + WASM）自动框出每个可见头部并统计人数，图片不上传服务器。</p>
   <div class="links">
-    <a href="../">项目结果页</a><a href="../slides.html">PPT 汇报</a><a href="../index.html">模型说明</a>
+    <a href="../">项目结果页</a><a href="../slides.html">PPT 汇报</a>
   </div>
 </header>
 
@@ -68,7 +71,8 @@ footer{color:var(--muted);font-size:.82rem;text-align:center;margin-top:50px}
     <label>置信度阈值 <input type="range" id="conf" min="5" max="90" value="25"> <span id="confVal">0.25</span></label>
     <button id="runBtn" disabled class="primary">重新识别</button>
   </div>
-  <div class="status" id="status">正在加载模型（约 12 MB，仅首次需要）…</div>
+  <div class="status" id="status">准备加载…</div>
+  <div class="progress" id="progressBox" style="display:none"><i id="progressBar"></i></div>
 </div>
 
 <div class="card">
@@ -81,34 +85,94 @@ footer{color:var(--muted);font-size:.82rem;text-align:center;margin-top:50px}
     <div class="stat"><div class="k">推理耗时（WASM, 单线程）</div><div class="v" id="statTime">-</div></div>
     <div class="stat"><div class="k">图片尺寸</div><div class="v" id="statSize">-</div></div>
   </div>
-  <div class="note">模型基于教室俯拍/监控视角训练（head 单类），教室照片效果最佳；近景自拍、严重遮挡或极暗画面会有漏检。
-  调整置信度阈值可实时看到检出数量的变化（只做过滤，不重新推理）。</div>
+  <div class="note">模型为 int8 量化版（3.4MB，精度与 fp32 差 ±1~5 个框）。首次打开需下载模型+运行库约 7MB（已 gzip 压缩，之后走浏览器缓存）。
+  模型基于教室俯拍视角训练（head 单类）；调整置信度阈值可实时看到检出数量变化（只做过滤，不重新推理）。</div>
 </div>
 
-<footer>Classroom Head Detection · 纯浏览器推理（onnxruntime-web WASM）· 结果页: /head-detection/</footer>
+<footer>Classroom Head Detection · 纯浏览器推理（onnxruntime-web WASM + gzip）</footer>
 </div>
 
-<script src="ort.wasm.min.js"></script>
+<script src="ort.wasm.min.js" onerror="document.getElementById('status').textContent='运行库脚本加载失败（ort.wasm.min.js），请刷新重试。';document.getElementById('status').className='status error';"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const canvas = $("canvas");
 const ctx = canvas.getContext("2d");
 const statusEl = $("status");
+const progressBox = $("progressBox");
+const progressBar = $("progressBar");
 
 const IMGSZ = 640, NMS_IOU = 0.6;
+const FP32 = new URLSearchParams(location.search).get("model") === "fp32";
+const MODEL_URL = FP32 ? "model.onnx" : "model_int8.onnx";
 let session = null, img = null, raw = null, lastTime = 0;
 
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.wasmPaths = "./";
+window.addEventListener("error", (e) => setStatus("页面错误：" + (e.message || e.type), true));
+
+function setStatus(text, isError) {
+  statusEl.textContent = text;
+  statusEl.className = isError ? "status error" : "status";
+}
+
+function fmtMB(bytes) { return (bytes / 1048576).toFixed(1); }
+
+async function fetchWithProgress(url, label) {
+  const res = await fetch(url, { cache: "force-cache" });
+  if (!res.ok) throw new Error(`${url} 下载失败 HTTP ${res.status}`);
+  const total = Number(res.headers.get("content-length")) || 0;
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  progressBox.style.display = "block";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    const pct = total ? (received / total * 100) : 0;
+    progressBar.style.width = pct.toFixed(0) + "%";
+    setStatus(`${label} ${pct.toFixed(0)}%（${fmtMB(received)} / ${fmtMB(total)} MB）…`);
+  }
+  const buf = new Uint8Array(received);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf;
+}
+
+async function gunzip(u8) {
+  if (typeof DecompressionStream === "undefined") return null;
+  const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const ab = await new Response(stream).arrayBuffer();
+  return new Uint8Array(ab);
+}
+
+async function loadWasm() {
+  // gzip 版 3.7MB，解压后 14MB；不支持 DecompressionStream 时回退原文件
+  try {
+    const gz = await fetchWithProgress("ort-wasm-simd-threaded.wasm.gz", "下载推理运行库");
+    const wasm = await gunzip(gz);
+    if (wasm) return wasm;
+  } catch (err) {
+    console.warn("gzip 运行库失败，回退原文件：", err);
+  }
+  return await fetchWithProgress("ort-wasm-simd-threaded.wasm", "下载推理运行库(未压缩)");
+}
 
 async function loadModel() {
   try {
-    session = await ort.InferenceSession.create("model.onnx", { executionProviders: ["wasm"] });
-    statusEl.textContent = "模型就绪，请选择图片。";
+    setStatus("正在下载检测模型…");
+    const modelBytes = await fetchWithProgress(MODEL_URL, "下载检测模型");
+    const wasmBytes = await loadWasm();
+    setStatus("正在初始化推理引擎…");
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.wasmBinary = wasmBytes.buffer;
+    session = await ort.InferenceSession.create(modelBytes, { executionProviders: ["wasm"] });
+    progressBox.style.display = "none";
+    setStatus(`模型就绪（${FP32 ? "fp32" : "int8"}），请选择图片。`);
     $("runBtn").disabled = !img;
   } catch (err) {
-    statusEl.textContent = "模型加载失败：" + err.message;
+    progressBox.style.display = "none";
+    setStatus("模型加载失败：" + err.message + "（请刷新重试；若持续失败请检查网络）", true);
   }
 }
 
@@ -149,7 +213,7 @@ function nms(boxes, scores, thr) {
 
 async function run() {
   if (!session || !img) return;
-  statusEl.textContent = "识别中…";
+  setStatus("识别中…");
   await new Promise(r => setTimeout(r, 10));
 
   const { canvas: lb, r, dx, dy, w, h } = letterbox(img);
@@ -171,14 +235,13 @@ async function run() {
   for (let i = 0; i < N; i++) {
     const s = data[4 * N + i];
     if (s < 0.05) continue;
-    const cx = data[0 * N + i], cy = data[1 * N + i];
-    const bw = data[2 * N + i], bh = data[3 * N + i];
+    const cx = data[i], cy = data[N + i], bw = data[2 * N + i], bh = data[3 * N + i];
     boxes.push([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2]);
     scores.push(s);
   }
   raw = { boxes, scores, r, dx, dy, w, h };
   draw();
-  statusEl.textContent = "";
+  setStatus("");
 }
 
 function draw() {
@@ -220,7 +283,7 @@ function loadImage(src, revoke) {
     if (revoke) URL.revokeObjectURL(src);
     run();
   };
-  im.onerror = () => { statusEl.textContent = "图片加载失败。"; };
+  im.onerror = () => setStatus("图片加载失败。", true);
   im.src = src;
 }
 
