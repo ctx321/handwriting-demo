@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classroom Head Detection - 项目结果</title>
+<style>
+:root{--bg:#0b1220;--panel:#131c2e;--panel2:#0f1729;--line:rgba(148,163,184,.18);
+--text:#e2e8f0;--muted:#8ea0bb;--accent:#38bdf8;--pos:#34d399;--neg:#f87171;--amber:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+background:radial-gradient(1200px 900px at 80% -10%, #123 0%, var(--bg) 55%);color:var(--text);line-height:1.65}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 20px 80px}
+header{text-align:center;padding:30px 0 8px}
+.kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.22em;font-size:.78rem;font-weight:700}
+h1{font-size:2rem;margin:.4rem 0 .4rem}
+header p{color:var(--muted);max-width:720px;margin:0 auto}
+.badge{display:inline-block;margin-top:12px;font-size:.78rem;font-weight:700;color:#052e16;
+background:linear-gradient(135deg,var(--pos),#6ee7b7);padding:5px 12px;border-radius:999px}
+nav{position:sticky;top:0;z-index:5;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);
+border-bottom:1px solid var(--line);display:flex;gap:4px;justify-content:center;flex-wrap:wrap;padding:9px}
+nav a{color:var(--muted);text-decoration:none;font-size:.88rem;padding:6px 12px;border-radius:999px}
+nav a:hover{color:var(--text);background:rgba(148,163,184,.12)}
+section{margin-top:42px}
+h2{font-size:1.45rem;margin:0 0 6px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;
+box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat .k{color:var(--muted);font-size:.78rem}
+.stat .v{font-size:1.15rem;font-weight:700;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:10px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600;font-size:.8rem}
+td:first-child{color:var(--muted)}
+img{max-width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.gallery{display:grid;grid-template-columns:1fr;gap:18px;margin-top:14px}
+.base-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.base-grid img{margin-bottom:4px}
+.base-grid .pair-title{grid-column:1 / -1;margin-top:8px}
+.pair-title{font-size:.86rem;color:var(--muted);margin-bottom:6px}
+.pair-imgs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+code{background:rgba(148,163,184,.15);padding:1px 7px;border-radius:6px;font-size:.9em}
+pre{background:#0b1120;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;
+font-size:.82rem;line-height:1.5}
+.callout{border-left:3px solid var(--amber);background:rgba(251,191,36,.07);
+padding:10px 14px;border-radius:0 12px 12px 0;margin-top:14px;color:#fde68a;font-size:.92rem}
+.callout.green{border-left-color:var(--pos);background:rgba(52,211,153,.06);color:#a7f3d0}
+ul{margin:8px 0 0;padding-left:22px}
+li{margin:5px 0}
+footer{color:var(--muted);font-size:.82rem;text-align:center;margin-top:60px}
+</style>
+</head>
+<body>
+<nav>
+  <a href="#overview">概览</a><a href="#data">数据</a><a href="#starting">起始模型</a>
+  <a href="#baseline">基准 (Task 3)</a><a href="#finetune">微调 (Task 4)</a>
+  <a href="#compare">对比 (Task 5)</a><a href="#tasks">其他任务</a><a href="#run">复现</a>
+</nav>
+<div class="wrap">
+<header>
+  <div class="kicker">Classroom Head Detection</div>
+  <h1>教室场景头部检测 - 项目结果</h1>
+  <p>YOLOv8n 单类（head）检测:从 COCO 初始化 → general 集自训练起始模型 → classroom 微调，
+  在固定 150 张 classroom test 上用同一套 IoU/AP 实现对比。</p>
+  <span class="badge">已完成六个任务 · GPU: RTX 4060 Laptop (CUDA 13.2)</span>
+</header>
+
+<section id="overview">
+  <h2>概览</h2>
+  <p class="sub">Pipeline: 标注检查 → 基准评测 → 微调 → 对照实验 → 前后对比 → 摄像头演示。</p>
+  <div class="grid2">
+    <div class="stat"><div class="k">数据集</div><div class="v">1,300 图 / 38,031 head 框</div></div>
+    <div class="stat"><div class="k">类别</div><div class="v">head (ID 0)</div></div>
+    <div class="stat"><div class="k">基准 AP50</div><div class="v">0.8296</div></div>
+    <div class="stat"><div class="k">微调后 AP50</div><div class="v">0.9494</div></div>
+    <div class="stat"><div class="k">微调后 AP50-95</div><div class="v">0.4740</div></div>
+    <div class="stat"><div class="k">推理速度 (batch 1)</div><div class="v">13.0 ms/图</div></div>
+  </div>
+  <div class="callout">说明:课程包不包含 instructor 的起始 checkpoint(需向其索取)。本项目使用
+  <b>自训练替代版</b>——从 COCO 权重初始化、仅在 general 集(240/60)上训练得到,过程中未接触 classroom val/test。
+  拿到正式 checkpoint 后,只需重跑 <code>src.predict</code> / <code>src.evaluate</code> 两步即可替换基准列。</div>
+</section>
+
+<section id="data">
+  <h2>数据集与划分</h2>
+  <table><thead><tr><th>Image group</th><th>训练</th><th>验证</th><th>测试</th><th>总计</th></tr></thead><tbody><tr><td>Classroom</td><td>700</td><td>150</td><td>150</td><td>1,000</td></tr><tr><td>General scenes</td><td>240</td><td>60</td><td>0</td><td>300</td></tr><tr><td>合计</td><td>940</td><td>210</td><td>150</td><td>1,300</td></tr></tbody></table>
+  <ul>
+    <li>标注标准: 整个可见头部(含侧脸/后脑/遮挡),不是人脸框、不是人体框。</li>
+    <li>自动化数据检查(Task 2): classroom train 700 张中 1 张有标记; general train 240 张 0 标记。
+    人工复核日志模板已生成于 <code>inspection/</code>。</li>
+  </ul>
+</section>
+
+<section id="starting">
+  <h2>起始检测器(自训练替代版)</h2>
+  <p class="sub">初始化: COCO yolov8n.pt · 数据: general 240/60 · epochs 100 · imgsz 640 · batch 16 · lr0 0.001 · seed 0 · GPU</p>
+  <table><thead><tr><th>general val 最终结果</th><th></th></tr></thead><tbody><tr><td>仅 general 集</td></tr><tr><td>P 0.903 / R 0.791</td></tr><tr><td>mAP50 0.885</td></tr><tr><td>mAP50-95 0.485</td></tr></tbody></table>
+  <div class="card" style="margin-top:12px"><svg viewBox="0 0 860 300" style="width:100%;height:auto"><line x1="46" y1="254.0" x2="814" y2="254.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="258.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.175</text><line x1="46" y1="202.0" x2="814" y2="202.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="206.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.257</text><line x1="46" y1="150.0" x2="814" y2="150.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="154.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.338</text><line x1="46" y1="98.0" x2="814" y2="98.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="102.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.419</text><line x1="46" y1="46.0" x2="814" y2="46.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="50.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.501</text><text x="46.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">0</text><text x="122.8" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">10</text><text x="199.6" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">20</text><text x="276.4" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">30</text><text x="353.2" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">40</text><text x="430.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">50</text><text x="506.8" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">60</text><text x="583.6" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">70</text><text x="660.4" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">80</text><text x="737.2" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">90</text><text x="814.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">100</text><polyline points="53.7,241.5 61.4,191.4 69.0,171.1 76.7,215.4 84.4,166.4 92.1,184.6 99.8,170.4 107.4,112.2 115.1,111.0 122.8,123.9 130.5,103.4 138.2,100.5 145.8,79.8 153.5,83.9 161.2,82.8 168.9,80.4 176.6,87.5 184.2,76.2 191.9,84.6 199.6,84.4 207.3,69.3 215.0,73.0 222.6,94.5 230.3,63.0 238.0,77.7 245.7,65.9 253.4,76.6 261.0,72.5 268.7,71.2 276.4,88.5 284.1,67.0 291.8,72.5 299.4,75.2 307.1,69.4 314.8,71.0 322.5,71.1 330.2,77.1 337.8,80.9 345.5,71.2 353.2,72.4 360.9,68.6 368.6,70.0 376.2,67.3 383.9,70.4 391.6,71.0 399.3,65.1 407.0,60.7 414.6,63.9 422.3,61.4 430.0,66.4 437.7,75.1 445.4,68.3 453.0,74.9 460.7,71.0 468.4,65.3 476.1,60.1 483.8,60.1 491.4,59.1 499.1,58.5 506.8,68.6 514.5,67.4 522.2,62.0 529.8,58.4 537.5,64.1 545.2,60.9 552.9,61.6 560.6,73.7 568.2,67.1 575.9,58.8 583.6,62.0 591.3,63.9 599.0,61.1 606.6,64.0 614.3,61.4 622.0,61.6 629.7,64.0 637.4,72.3 645.0,68.1 652.7,59.8 660.4,69.3 668.1,70.6 675.8,63.1 683.4,65.4 691.1,61.9 698.8,59.9 706.5,60.7 714.2,58.3 721.8,58.9 729.5,56.8 737.2,62.3 744.9,64.1 752.6,61.4 760.2,65.4 767.9,59.6 775.6,55.8 783.3,57.7 791.0,57.5 798.6,58.8 806.3,57.5 814.0,58.3" fill="none" stroke="#38bdf8" stroke-width="2.2"/><polyline points="53.7,181.0 61.4,159.4 69.0,171.4 76.7,152.8 84.4,153.3 92.1,147.6 99.8,160.8 107.4,156.0 115.1,150.3 122.8,142.0 130.5,138.8 138.2,135.7 145.8,145.5 153.5,152.2 161.2,133.0 168.9,128.3 176.6,136.1 184.2,128.7 191.9,118.7 199.6,119.8 207.3,122.9 215.0,132.3 222.6,131.0 230.3,113.1 238.0,116.1 245.7,115.4 253.4,128.3 261.0,129.2 268.7,117.9 276.4,118.8 284.1,117.6 291.8,123.2 299.4,114.8 307.1,116.3 314.8,122.4 322.5,111.8 330.2,115.0 337.8,111.0 345.5,132.3 353.2,114.2 360.9,115.8 368.6,111.6 376.2,112.4 383.9,123.9 391.6,113.0 399.3,108.1 407.0,120.1 414.6,110.0 422.3,106.2 430.0,110.8 437.7,123.3 445.4,111.6 453.0,114.5 460.7,106.3 468.4,108.7 476.1,112.2 483.8,110.5 491.4,109.6 499.1,111.0 506.8,114.9 514.5,111.7 522.2,112.8 529.8,107.6 537.5,105.9 545.2,114.1 552.9,106.6 560.6,106.4 568.2,108.4 575.9,112.1 583.6,106.4 591.3,107.7 599.0,104.6 606.6,106.3 614.3,106.4 622.0,109.3 629.7,106.8 637.4,106.7 645.0,105.7 652.7,107.8 660.4,106.4 668.1,104.6 675.8,105.2 683.4,110.2 691.1,104.0 698.8,106.4 706.5,105.0 714.2,106.7 721.8,109.4 729.5,103.4 737.2,105.7 744.9,107.1 752.6,109.0 760.2,106.6 767.9,107.3 775.6,109.1 783.3,106.2 791.0,105.9 798.6,105.0 806.3,105.4 814.0,107.0" fill="none" stroke="#34d399" stroke-width="2.2"/><polyline points="53.7,178.4 61.4,164.7 69.0,178.9 76.7,153.0 84.4,157.1 92.1,153.6 99.8,149.1 107.4,137.2 115.1,134.8 122.8,145.6 130.5,130.9 138.2,133.6 145.8,138.8 153.5,137.9 161.2,130.7 168.9,130.0 176.6,148.1 184.2,126.0 191.9,123.4 199.6,151.0 207.3,125.1 215.0,129.2 222.6,128.2 230.3,130.4 238.0,125.1 245.7,181.7 253.4,127.8 261.0,118.5 268.7,126.0 276.4,127.4 284.1,115.6 291.8,128.6 299.4,121.5 307.1,117.4 314.8,116.1 322.5,116.1 330.2,117.9 337.8,116.1 345.5,122.6 353.2,117.2 360.9,115.3 368.6,113.7 376.2,114.7 383.9,116.4 391.6,112.2 399.3,111.0 407.0,113.5 414.6,111.9 422.3,122.3 430.0,116.5 437.7,108.9 445.4,112.1 453.0,113.1 460.7,111.8 468.4,111.7 476.1,112.8 483.8,108.9 491.4,110.6 499.1,109.8 506.8,115.9 514.5,108.2 522.2,114.7 529.8,112.0 537.5,111.0 545.2,109.9 552.9,108.7 560.6,111.0 568.2,111.3 575.9,113.0 583.6,107.9 591.3,109.4 599.0,107.2 606.6,108.0 614.3,106.6 622.0,108.5 629.7,107.8 637.4,106.4 645.0,108.0 652.7,107.0 660.4,105.2 668.1,107.1 675.8,105.4 683.4,106.2 691.1,106.9 698.8,108.4 706.5,105.5 714.2,108.2 721.8,108.0 729.5,108.6 737.2,106.7 744.9,107.9 752.6,107.9 760.2,107.1 767.9,107.7 775.6,106.3 783.3,107.0 791.0,108.9 798.6,106.4 806.3,106.6 814.0,106.7" fill="none" stroke="#fbbf24" stroke-width="2.2"/><text x="46" y="20" fill="#8ea0bb" font-size="12">AP50-95 during training (blue: starting/general, green: classroom, amber: mixed)</text></svg></div>
+  <div class="card" style="margin-top:12px"><svg viewBox="0 0 860 300" style="width:100%;height:auto"><line x1="46" y1="254.0" x2="814" y2="254.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="258.0" text-anchor="end" fill="#8ea0bb" font-size="11">0.962</text><line x1="46" y1="202.0" x2="814" y2="202.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="206.0" text-anchor="end" fill="#8ea0bb" font-size="11">1.357</text><line x1="46" y1="150.0" x2="814" y2="150.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="154.0" text-anchor="end" fill="#8ea0bb" font-size="11">1.752</text><line x1="46" y1="98.0" x2="814" y2="98.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="102.0" text-anchor="end" fill="#8ea0bb" font-size="11">2.147</text><line x1="46" y1="46.0" x2="814" y2="46.0" stroke="rgba(148,163,184,.15)"/><text x="38" y="50.0" text-anchor="end" fill="#8ea0bb" font-size="11">2.542</text><text x="46.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">0</text><text x="122.8" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">10</text><text x="199.6" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">20</text><text x="276.4" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">30</text><text x="353.2" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">40</text><text x="430.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">50</text><text x="506.8" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">60</text><text x="583.6" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">70</text><text x="660.4" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">80</text><text x="737.2" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">90</text><text x="814.0" y="272" text-anchor="middle" fill="#8ea0bb" font-size="11">100</text><polyline points="53.7,147.1 61.4,158.9 69.0,167.8 76.7,166.5 84.4,175.9 92.1,166.6 99.8,173.8 107.4,177.2 115.1,183.1 122.8,183.7 130.5,181.9 138.2,182.5 145.8,186.9 153.5,179.6 161.2,181.9 168.9,187.3 176.6,189.0 184.2,192.8 191.9,190.9 199.6,188.1 207.3,192.9 215.0,197.6 222.6,194.7 230.3,193.8 238.0,189.4 245.7,193.7 253.4,199.5 261.0,196.8 268.7,197.8 276.4,198.8 284.1,199.0 291.8,198.9 299.4,202.5 307.1,197.5 314.8,202.6 322.5,201.3 330.2,203.2 337.8,202.6 345.5,199.7 353.2,205.9 360.9,208.3 368.6,206.3 376.2,205.1 383.9,206.6 391.6,211.0 399.3,208.6 407.0,208.3 414.6,209.4 422.3,209.9 430.0,212.9 437.7,212.4 445.4,212.9 453.0,215.2 460.7,211.4 468.4,209.6 476.1,213.7 483.8,215.1 491.4,217.3 499.1,214.2 506.8,216.7 514.5,216.4 522.2,217.7 529.8,216.9 537.5,215.0 545.2,220.5 552.9,218.0 560.6,216.5 568.2,219.4 575.9,223.1 583.6,219.7 591.3,220.9 599.0,220.9 606.6,222.1 614.3,221.9 622.0,226.6 629.7,226.8 637.4,225.9 645.0,225.5 652.7,224.1 660.4,224.8 668.1,223.5 675.8,224.1 683.4,221.8 691.1,226.8 698.8,232.6 706.5,232.2 714.2,232.7 721.8,234.0 729.5,233.3 737.2,232.7 744.9,230.2 752.6,234.7 760.2,235.3 767.9,237.3 775.6,238.6 783.3,239.7 791.0,240.7 798.6,239.4 806.3,241.5 814.0,239.2" fill="none" stroke="#38bdf8" stroke-width="2.2"/><polyline points="53.7,55.8 61.4,88.4 69.0,90.1 76.7,93.1 84.4,96.7 92.1,104.7 99.8,97.6 107.4,103.5 115.1,103.4 122.8,105.4 130.5,111.0 138.2,110.5 145.8,114.0 153.5,108.3 161.2,116.7 168.9,115.2 176.6,115.0 184.2,114.9 191.9,119.0 199.6,118.3 207.3,114.4 215.0,113.9 222.6,118.2 230.3,118.9 238.0,118.3 245.7,118.0 253.4,122.0 261.0,121.3 268.7,123.3 276.4,119.4 284.1,124.8 291.8,124.1 299.4,125.9 307.1,123.5 314.8,122.8 322.5,126.4 330.2,125.6 337.8,130.2 345.5,127.8 353.2,127.5 360.9,126.0 368.6,128.0 376.2,128.0 383.9,128.1 391.6,127.4 399.3,127.8 407.0,130.1 414.6,131.5 422.3,128.6 430.0,131.3 437.7,129.7 445.4,128.3 453.0,131.0 460.7,130.1 468.4,133.8 476.1,132.8 483.8,130.9 491.4,132.2 499.1,132.8 506.8,133.1 514.5,134.8 522.2,129.3 529.8,130.0 537.5,136.1 545.2,130.8 552.9,129.6 560.6,136.7 568.2,138.3 575.9,133.6 583.6,132.4 591.3,138.5 599.0,137.6 606.6,136.2 614.3,140.6 622.0,138.5 629.7,139.4 637.4,140.5 645.0,136.9 652.7,139.5 660.4,141.7 668.1,138.1 675.8,138.9 683.4,138.4 691.1,138.8 698.8,139.5 706.5,141.8 714.2,142.0 721.8,144.3 729.5,141.3 737.2,142.5 744.9,146.8 752.6,149.9 760.2,149.2 767.9,150.5 775.6,152.8 783.3,148.8 791.0,151.7 798.6,154.0 806.3,153.7 814.0,154.0" fill="none" stroke="#34d399" stroke-width="2.2"/><polyline points="53.7,124.5 61.4,128.5 69.0,116.3 76.7,127.0 84.4,131.8 92.1,133.1 99.8,127.2 107.4,133.0 115.1,128.4 122.8,134.5 130.5,136.8 138.2,133.2 145.8,139.3 153.5,137.6 161.2,142.5 168.9,138.9 176.6,142.1 184.2,130.0 191.9,140.4 199.6,141.0 207.3,144.4 215.0,140.8 222.6,145.6 230.3,141.5 238.0,142.5 245.7,145.0 253.4,143.8 261.0,145.9 268.7,147.1 276.4,149.5 284.1,150.9 291.8,148.4 299.4,147.6 307.1,151.1 314.8,150.5 322.5,148.5 330.2,152.9 337.8,149.7 345.5,150.6 353.2,152.5 360.9,148.9 368.6,153.9 376.2,152.3 383.9,154.5 391.6,156.8 399.3,153.1 407.0,155.8 414.6,153.5 422.3,154.6 430.0,154.2 437.7,155.9 445.4,157.3 453.0,155.3 460.7,156.3 468.4,158.3 476.1,156.6 483.8,158.0 491.4,158.6 499.1,160.5 506.8,161.7 514.5,157.7 522.2,156.6 529.8,160.1 537.5,163.8 545.2,161.5 552.9,160.5 560.6,162.1 568.2,161.3 575.9,164.3 583.6,163.5 591.3,160.6 599.0,163.2 606.6,162.2 614.3,163.9 622.0,164.6 629.7,164.2 637.4,167.0 645.0,166.4 652.7,168.6 660.4,167.2 668.1,167.1 675.8,167.6 683.4,164.6 691.1,168.3 698.8,170.2 706.5,166.2 714.2,171.3 721.8,171.1 729.5,172.0 737.2,171.4 744.9,172.9 752.6,174.0 760.2,175.6 767.9,176.2 775.6,174.7 783.3,178.8 791.0,178.2 798.6,178.4 806.3,179.4 814.0,179.7" fill="none" stroke="#fbbf24" stroke-width="2.2"/><text x="46" y="20" fill="#8ea0bb" font-size="12">training box loss (same colours)</text></svg></div>
+</section>
+
+<section id="baseline">
+  <h2>Task 3 - 基准评测(classroom test)</h2>
+  <p class="sub">150 张测试图, 4,724 个 GT。conf 0.25 / IoU 0.50; AP 保留低分预测并用 101 点插值扫阈值。</p>
+  <table><thead><tr><th>指标</th><th>Before fine tuning</th></tr></thead><tbody><tr><td>Precision@0.25</td><td>0.7659</td></tr><tr><td>Recall@0.25</td><td>0.7771</td></tr><tr><td>AP50</td><td>0.8296</td></tr><tr><td>AP50-95</td><td>0.3518</td></tr><tr><td>速度/图</td><td>18.8 ms</td></tr></tbody></table>
+  <p class="sub" style="margin-top:14px">误差最大的 5 张测试图(绿=GT, 红=预测):</p>
+  <div class="base-grid">
+        <div class="pair-title">img_000007 · 基准模型 (绿=GT, 红=预测)</div>
+        <img src="assets/base_img_000007.jpg" alt="img_000007 baseline">
+        <div class="pair-title">img_000286 · 基准模型 (绿=GT, 红=预测)</div>
+        <img src="assets/base_img_000286.jpg" alt="img_000286 baseline">
+        <div class="pair-title">img_000435 · 基准模型 (绿=GT, 红=预测)</div>
+        <img src="assets/base_img_000435.jpg" alt="img_000435 baseline">
+        <div class="pair-title">img_000529 · 基准模型 (绿=GT, 红=预测)</div>
+        <img src="assets/base_img_000529.jpg" alt="img_000529 baseline">
+        <div class="pair-title">img_001192 · 基准模型 (绿=GT, 红=预测)</div>
+        <img src="assets/base_img_001192.jpg" alt="img_001192 baseline"></div>
+</section>
+
+<section id="finetune">
+  <h2>Task 4 - 微调与对照实验</h2>
+  <p class="sub">同一起始 checkpoint、同 seed/imgsz/batch/epochs;唯一变化 = 训练数据(classroom vs classroom+general)。</p>
+  <table><thead><tr><th>训练数据</th><th>训练图数</th><th>P@0.25</th><th>R@0.25</th><th>AP50</th><th>AP50-95</th><th>速度/图</th></tr></thead><tbody><tr><td>classroom 微调</td><td>700</td><td>0.8717</td><td>0.9251</td><td>0.9494</td><td>0.4740</td><td>13.0 ms</td></tr><tr><td>mixed 对照实验</td><td>700+240</td><td>0.8461</td><td>0.9308</td><td>0.9499</td><td>0.4732</td><td>13.8 ms</td></tr></tbody></table>
+  <div class="callout green">对照实验结论: 加入 general 图像后 recall 略升(0.9251→0.9308)但 precision 下降
+  (0.8717→0.8461), AP 基本持平(AP50 +0.0005, AP50-95 -0.0008)。对固定的教室测试集没有实质增益——
+  因为起始模型已在 general 上学过通用头部特征,重复加入反而稀释了教室数据占比。</div>
+</section>
+
+<section id="compare">
+  <h2>Task 5 - 前后对比</h2>
+  <table><thead><tr><th>Metric</th><th>Before (starting)</th><th>After (finetune)</th><th>Mixed (experiment)</th></tr></thead><tbody><tr><td>Precision @ conf 0.25</td><td>0.7659</td><td>0.8717</td><td>0.8461</td></tr><tr><td>Recall @ conf 0.25</td><td>0.7771</td><td>0.9251</td><td>0.9308</td></tr><tr><td>AP50</td><td>0.8296</td><td>0.9494</td><td>0.9499</td></tr><tr><td>AP50-95</td><td>0.3518</td><td>0.4740</td><td>0.4732</td></tr><tr><td>时间/图 (ms)</td><td>18.8</td><td>13.0</td><td>13.8</td></tr></tbody></table>
+  <p class="sub" style="margin-top:14px">同一 5 张示例图 (左: 基准 / 右: 微调):</p>
+  <div class="gallery">
+        <div class="pair">
+          <div class="pair-title">img_000007 · <span style="color:#f87171">左: 基准</span> / <span style="color:#34d399">右: 微调</span></div>
+          <div class="pair-imgs"><img src="assets/base_img_000007.jpg" alt="img_000007 baseline"><img src="assets/fine_img_000007.jpg" alt="img_000007 finetuned"></div>
+        </div>
+        <div class="pair">
+          <div class="pair-title">img_000286 · <span style="color:#f87171">左: 基准</span> / <span style="color:#34d399">右: 微调</span></div>
+          <div class="pair-imgs"><img src="assets/base_img_000286.jpg" alt="img_000286 baseline"><img src="assets/fine_img_000286.jpg" alt="img_000286 finetuned"></div>
+        </div>
+        <div class="pair">
+          <div class="pair-title">img_000435 · <span style="color:#f87171">左: 基准</span> / <span style="color:#34d399">右: 微调</span></div>
+          <div class="pair-imgs"><img src="assets/base_img_000435.jpg" alt="img_000435 baseline"><img src="assets/fine_img_000435.jpg" alt="img_000435 finetuned"></div>
+        </div>
+        <div class="pair">
+          <div class="pair-title">img_000529 · <span style="color:#f87171">左: 基准</span> / <span style="color:#34d399">右: 微调</span></div>
+          <div class="pair-imgs"><img src="assets/base_img_000529.jpg" alt="img_000529 baseline"><img src="assets/fine_img_000529.jpg" alt="img_000529 finetuned"></div>
+        </div>
+        <div class="pair">
+          <div class="pair-title">img_001192 · <span style="color:#f87171">左: 基准</span> / <span style="color:#34d399">右: 微调</span></div>
+          <div class="pair-imgs"><img src="assets/base_img_001192.jpg" alt="img_001192 baseline"><img src="assets/fine_img_001192.jpg" alt="img_001192 finetuned"></div>
+        </div></div>
+</section>
+
+<section id="tasks">
+  <h2>Task 1 标注工具 · Task 6 摄像头演示</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin-top:0">标注工具 (Flask + Canvas)</h3>
+      <p class="sub">增删改拖拽/缩放框、缩放、标签开关、上一张/下一张、保存到 annotations_edited/(不覆盖原文件)、导出 YOLO zip。</p>
+      <img src="assets/annotator.jpg" alt="annotator">
+      <pre>python -m annotator.app --images &lt;dataset&gt;/images/classroom/train \
+    --labels &lt;dataset&gt;/labels/classroom/train --format yolo</pre>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">摄像头演示</h3>
+      <p class="sub">webcam.py: 实时框 + 置信度 + 帧率 + conf 滑杆。单帧推理示例(同模型管线):</p>
+      <img src="assets/single_demo.jpg" alt="single image demo">
+      <pre>python -m src.webcam --weights runs/finetune/weights/best.pt --camera 0</pre>
+      <p class="sub">实测说明: 本机摄像头取景为空场景(8 帧均无人物)时检测数为 0,符合预期;
+      摄像头近景与教室俯拍视角存在差异(域差异),需要人物入镜才能演示。</p>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <h2>复现步骤(GPU 机器)</h2>
+  <pre>install.bat cu124 (或其他 CUDA tag)          # 安装 CUDA 版 PyTorch + 依赖
+python check_gpu.py                          # CUDA available: True
+python -m src.data_check ...                 # Task 2 自动检查
+python scripts/train_starting.py             # 起始检测器 (general, 本页替代版)
+python -m src.predict  --weights runs/starting_general/weights/best.pt --images .../classroom/test --out runs/baseline/preds.json
+python -m src.evaluate --images ... --labels ... --preds runs/baseline/preds.json --out runs/baseline/metrics.json
+python -m src.visualize --images ... --labels ... --preds runs/baseline/preds.json --out runs/baseline/vis --worst 5
+python -m src.train --weights runs/starting_general/weights/best.pt --data classroom --epochs 100 --name finetune
+python -m src.train --weights runs/starting_general/weights/best.pt --data mixed     --epochs 100 --name finetune_mixed
+python -m src.compare ...                    # Task 5 对比表</pre>
+</section>
+
+<footer>Classroom Head Detection · 结果页 · 数据与模型仅用于课程项目</footer>
+</div>
+</body>
+</html>
