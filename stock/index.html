@@ -20,7 +20,7 @@ padding:5px 12px;border-radius:999px;white-space:nowrap}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;
 box-shadow:0 10px 30px rgba(0,0,0,.25);margin-top:16px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-input[type=date]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+input[type=date],select{background:var(--panel2);color:var(--text);border:1px solid var(--line);
 border-radius:10px;padding:8px 12px;font-size:.95rem}
 button{border:none;border-radius:10px;padding:9px 18px;font-size:.92rem;cursor:pointer;
 background:rgba(148,163,184,.15);color:var(--text)}
@@ -59,6 +59,11 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:36px}
 <div class="card">
   <div class="toolbar">
     <label>预测日期 <input type="date" id="dateInput"></label>
+    <label>策略 <select id="strategy">
+      <option value="lstm">LSTM 配置（作业要求）</option>
+      <option value="qqq_gated">LSTM 择时 + 满仓 QQQ</option>
+      <option value="qqq">只买 QQQ（基准）</option>
+    </select></label>
     <button class="primary" id="runBtn">预测</button>
     <button id="latestBtn">最新日期</button>
     <span class="status" id="status">初始化…</span>
@@ -215,7 +220,7 @@ function lstmForward(xWin){ // 60 x F standardized
   return out;
 }
 
-function predictAt(idx){
+function predictAt(idx, strategy){
   if (idx < WIN - 1) throw new Error("该日期历史不足");
   const lo = idx - 251;
   const win = {};
@@ -235,33 +240,43 @@ function predictAt(idx){
     for (let i = p.length - 60; i < p.length; i++) rr.push(p[i] / p[i-1] - 1);
     vol[c] = sampleStats(rr).std;
   }
-  const score = ETF.map((c, k) => Math.max(rHat[k], 0) / Math.max(vol[c], 0.005));
   const weights = {};
-  let sum = score.reduce((a,b)=>a+b,0);
-  if (sum <= 1e-12){
-    for (const c of ETF) weights[c] = 0;
-    weights.CASH = 1;
+  if (strategy === "qqq"){
+    for (const c of ETF) weights[c] = c === "QQQ" ? 1 : 0;
+    weights.CASH = 0;
+  } else if (strategy === "qqq_gated"){
+    const hold = rHat[0] > 0;
+    for (const c of ETF) weights[c] = hold && c === "QQQ" ? 1 : 0;
+    weights.CASH = hold ? 0 : 1;
   } else {
-    let w = score.map(v => v / sum);
-    for (let it = 0; it < 20; it++){
-      const over = w.map(v => v > 0.4);
-      if (!over.some(Boolean)) break;
-      const excess = w.reduce((a,v,i)=> a + (over[i] ? v - 0.4 : 0), 0);
-      w = w.map((v,i)=> over[i] ? 0.4 : v);
-      const freeSum = w.reduce((a,v,i)=> a + (over[i] ? 0 : v), 0);
-      if (freeSum <= 0) break;
-      w = w.map((v,i)=> over[i] ? v : v + excess * v / freeSum);
+    const score = ETF.map((c, k) => Math.max(rHat[k], 0) / Math.max(vol[c], 0.005));
+    let sum = score.reduce((a,b)=>a+b,0);
+    if (sum <= 1e-12){
+      for (const c of ETF) weights[c] = 0;
+      weights.CASH = 1;
+    } else {
+      let w = score.map(v => v / sum);
+      for (let it = 0; it < 20; it++){
+        const over = w.map(v => v > 0.4);
+        if (!over.some(Boolean)) break;
+        const excess = w.reduce((a,v,i)=> a + (over[i] ? v - 0.4 : 0), 0);
+        w = w.map((v,i)=> over[i] ? 0.4 : v);
+        const freeSum = w.reduce((a,v,i)=> a + (over[i] ? 0 : v), 0);
+        if (freeSum <= 0) break;
+        w = w.map((v,i)=> over[i] ? v : v + excess * v / freeSum);
+      }
+      w = w.map(v => v < 0.03 ? 0 : v);
+      const total = w.reduce((a,b)=>a+b,0);
+      const cash = Math.max(0, 1 - total);
+      for (let k = 0; k < 7; k++) weights[ETF[k]] = w[k] / (total + cash);
+      weights.CASH = cash / (total + cash);
     }
-    w = w.map(v => v < 0.03 ? 0 : v);
-    const total = w.reduce((a,b)=>a+b,0);
-    const cash = Math.max(0, 1 - total);
-    for (let k = 0; k < 7; k++) weights[ETF[k]] = w[k] / (total + cash);
-    weights.CASH = cash / (total + cash);
   }
   const prices = {};
   for (const c of ETF) prices[c] = win[c][win[c].length - 1];
   return {
     date: DATES[idx],
+    strategy,
     rHat: Object.fromEntries(ETF.map((c,k)=>[c, rHat[k]])),
     weights, prices, win
   };
@@ -372,7 +387,8 @@ function drawPrices(data){
 }
 
 function render(data){
-  $("reqDate").textContent = "（数据截止 " + data.date + "）";
+  const names = {lstm: "LSTM 配置", qqq_gated: "LSTM 择时 + 满仓 QQQ", qqq: "只买 QQQ（基准）"};
+  $("reqDate").textContent = "（数据截止 " + data.date + " · 策略：" + (names[data.strategy] || data.strategy) + "）";
   $("dateInput").value = data.date;
   drawReturns(data);
   drawWeights(data);
@@ -412,7 +428,7 @@ function run(dateStr){
   try {
     const idx = dateStr ? findIdx(dateStr) : N - 1;
     if (idx < WIN - 1) throw new Error("该日期之前的历史不足 252 个交易日");
-    render(predictAt(idx));
+    render(predictAt(idx, $("strategy").value));
     $("dateInput").min = DATES[WIN - 1];
     $("dateInput").max = DATES[N - 1];
     status.textContent = "完成";
@@ -424,10 +440,12 @@ function run(dateStr){
 
 $("runBtn").addEventListener("click", () => run($("dateInput").value));
 $("latestBtn").addEventListener("click", () => run(null));
+$("strategy").addEventListener("change", () => run($("dateInput").value || null));
 window.addEventListener("resize", () => { if (window.__last) { drawReturns(window.__last); drawWeights(window.__last); drawPrices(window.__last); } });
 const _r = render; render = d => { window.__last = d; _r(d); };
-const qd = new URLSearchParams(location.search).get("date");
-run(qd || null);
+const qp = new URLSearchParams(location.search);
+if (qp.get("strategy")) $("strategy").value = qp.get("strategy");
+run(qp.get("date") || null);
 </script>
 </body>
 </html>
